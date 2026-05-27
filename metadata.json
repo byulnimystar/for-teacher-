@@ -1,0 +1,6 @@
+{
+  "name": "토닥토닥 교실",
+  "description": "업무와 학부모 민원, 학생 지도로 지친 선생님들을 위한 따뜻한 위로와 고민 상담, 마음챙김 공간",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
