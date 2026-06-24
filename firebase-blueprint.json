@@ -1,0 +1,62 @@
+{
+  "entities": {
+    "ChatSession": {
+      "title": "Chat Session",
+      "description": "A collection of messages for a specific user counsel session",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The UID of the user who owns this chat" },
+        "messages": {
+          "type": "array",
+          "description": "List of message objects",
+          "items": { "type": "object" }
+        },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "messages", "updatedAt"]
+    },
+    "DiaryEntry": {
+      "title": "Diary Entry",
+      "description": "An individual emotion/gratitude diary entry",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "date": { "type": "string" },
+        "content": { "type": "string" },
+        "emotion": { "type": "string" },
+        "reply": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "date", "content", "emotion", "reply", "createdAt"]
+    },
+    "StressTestResult": {
+      "title": "Stress Test Result",
+      "description": "A record of a completed stress diagnostic test",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "date": { "type": "string" },
+        "score": { "type": "number" },
+        "level": { "type": "string" },
+        "description": { "type": "string" },
+        "advice": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "date", "score", "level", "description", "advice", "createdAt"]
+    }
+  },
+  "firestore": {
+    "users/{userId}/chats": {
+      "schema": "ChatSession",
+      "description": "User's consulting chat history"
+    },
+    "users/{userId}/diaries": {
+      "schema": "DiaryEntry",
+      "description": "User's secret emotion diaries"
+    },
+    "users/{userId}/stress_history": {
+      "schema": "StressTestResult",
+      "description": "User's diagnostic history"
+    }
+  }
+}

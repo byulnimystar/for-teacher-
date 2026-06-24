@@ -3,6 +3,21 @@ import path from "path";
 import fs from "fs";
 import { GoogleGenAI } from "@google/genai";
 import { createServer as createViteServer } from "vite";
+import admin from "firebase-admin";
+
+// Initialize Firebase Admin
+// Note: In this environment, it's safer to check for explicit service account if needed, 
+// but often standard credential-less init works if running in the same GCP project.
+// We'll use the project ID from provisioning.
+const FIREBASE_PROJECT_ID = "gen-lang-client-0367399939";
+
+if (admin.apps.length === 0) {
+  admin.initializeApp({
+    projectId: FIREBASE_PROJECT_ID,
+  });
+}
+
+const fdb = admin.firestore();
 
 // Initialize GoogleGenAI with Gemini API Key
 const apiKey = process.env.GEMINI_API_KEY || "";
@@ -15,37 +30,6 @@ const ai = new GoogleGenAI({
   },
 });
 
-// JSON file database path
-const DB_FILE = path.join(process.cwd(), "teacher_db.json");
-
-interface DBStructure {
-  chats: any[];
-  diaries: any[];
-  stressHistory: any[];
-}
-
-// Safely load database from JSON file
-function loadDB(): DBStructure {
-  try {
-    if (fs.existsSync(DB_FILE)) {
-      const fileData = fs.readFileSync(DB_FILE, "utf-8");
-      return JSON.parse(fileData);
-    }
-  } catch (err) {
-    console.error("Failed to read DB file, fallback to default", err);
-  }
-  return { chats: [], diaries: [], stressHistory: [] };
-}
-
-// Safely save database to JSON file
-function saveDB(data: DBStructure) {
-  try {
-    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), "utf-8");
-  } catch (err) {
-    console.error("Failed to write DB file", err);
-  }
-}
-
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -54,38 +38,56 @@ async function startServer() {
 
   // API 1: Health Check
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", mode: process.env.NODE_ENV });
+    res.json({ status: "ok", mode: process.env.NODE_ENV, firebase: !!admin.apps.length });
   });
 
-  // API 2: Chats - Get saved chats
-  app.get("/api/chats", (req, res) => {
-    const db = loadDB();
-    // If empty, we can let the client auto-initialize with its welcome message
-    res.json(db.chats);
+  // Middleware to extract UID (passed from client in this simple setup)
+  // In a production app, we would verify the idToken.
+  const getUid = (req: express.Request) => {
+    return req.headers["x-user-uid"] as string || "default_teacher";
+  };
+
+  // API 2: Chats - Get saved chats (From Firestore)
+  app.get("/api/chats", async (req, res) => {
+    try {
+      const uid = getUid(req);
+      const doc = await fdb.collection("users").doc(uid).collection("chats").doc("last_session").get();
+      if (doc.exists) {
+        res.json(doc.data()?.messages || []);
+      } else {
+        res.json([]);
+      }
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
   });
 
   // API 3: Chats - Save/Update chat list
-  app.post("/api/chats", (req, res) => {
+  app.post("/api/chats", async (req, res) => {
     try {
+      const uid = getUid(req);
       const { messages } = req.body;
       if (!messages || !Array.isArray(messages)) {
         return res.status(400).json({ error: "messages array is required" });
       }
-      const db = loadDB();
-      db.chats = messages;
-      saveDB(db);
-      res.json({ success: true, count: db.chats.length });
+      
+      await fdb.collection("users").doc(uid).collection("chats").doc("last_session").set({
+        userId: uid,
+        messages: messages,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      
+      res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
   // API 4: Chats - Delete/Clear chats
-  app.delete("/api/chats", (req, res) => {
+  app.delete("/api/chats", async (req, res) => {
     try {
-      const db = loadDB();
-      db.chats = [];
-      saveDB(db);
+      const uid = getUid(req);
+      await fdb.collection("users").doc(uid).collection("chats").doc("last_session").delete();
       res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -134,14 +136,25 @@ async function startServer() {
   });
 
   // API 6: Diaries - Get emotion diaries
-  app.get("/api/diaries", (req, res) => {
-    const db = loadDB();
-    res.json(db.diaries);
+  app.get("/api/diaries", async (req, res) => {
+    try {
+      const uid = getUid(req);
+      const snapshot = await fdb.collection("users").doc(uid).collection("diaries").orderBy("createdAt", "desc").get();
+      const diaries = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate?.() || new Date(),
+      }));
+      res.json(diaries);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
   });
 
-  // API 7: Diaries - Create new diary (saves on backend and calls Gemini response)
+  // API 7: Diaries - Create new diary
   app.post("/api/diaries", async (req, res) => {
     try {
+      const uid = getUid(req);
       const { content, emotion } = req.body;
       if (!content || typeof content !== "string") {
         return res.status(400).json({ error: "content text is required" });
@@ -150,7 +163,7 @@ async function startServer() {
         return res.status(400).json({ error: "emotion is required" });
       }
 
-      // Generate Reply using Gemini AI API
+      // Generate Reply using Gemini
       const response = await ai.models.generateContent({
         model: "gemini-3.5-flash",
         contents: `선생님께서 써 주신 오늘의 감정/감사 일기:
@@ -168,9 +181,8 @@ async function startServer() {
 
       const replyText = response.text || "선생님, 귀한 걸음 감사합니다. 늘 곁에서 쉼터가 되어 드릴게요.";
 
-      // Structure new entry
-      const newEntry = {
-        id: Math.random().toString(36).substring(2, 11),
+      const newDiary = {
+        userId: uid,
         date: new Date().toLocaleDateString("ko-KR", {
           year: "numeric",
           month: "long",
@@ -180,28 +192,23 @@ async function startServer() {
         content: content,
         emotion: emotion,
         reply: replyText,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
       };
 
-      const db = loadDB();
-      db.diaries.unshift(newEntry); // Insert at the front
-      saveDB(db);
-
-      res.status(201).json(newEntry);
+      const docRef = await fdb.collection("users").doc(uid).collection("diaries").add(newDiary);
+      
+      res.status(201).json({ id: docRef.id, ...newDiary });
     } catch (error: any) {
-      console.error("Error in /api/diaries (Create):", error);
-      res.status(500).json({
-        error: error.message || "따사로운 편지가 바람에 날아가 버렸어요. 다시 일기를 적고 요청해 주시면 감사하겠습니다.",
-      });
+      res.status(500).json({ error: error.message });
     }
   });
 
   // API 8: Diaries - Delete individual entry
-  app.delete("/api/diaries/:id", (req, res) => {
+  app.delete("/api/diaries/:id", async (req, res) => {
     try {
+      const uid = getUid(req);
       const { id } = req.params;
-      const db = loadDB();
-      db.diaries = db.diaries.filter((d) => d.id !== id);
-      saveDB(db);
+      await fdb.collection("users").doc(uid).collection("diaries").doc(id).delete();
       res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -209,21 +216,29 @@ async function startServer() {
   });
 
   // API 9: Stress History - Get diagnostics lists
-  app.get("/api/stress", (req, res) => {
-    const db = loadDB();
-    res.json(db.stressHistory);
+  app.get("/api/stress", async (req, res) => {
+    try {
+      const uid = getUid(req);
+      const snapshot = await fdb.collection("users").doc(uid).collection("stress_history").orderBy("createdAt", "desc").get();
+      const history = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate?.() || new Date(),
+      }));
+      res.json(history);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
   });
 
-  // API 10: Stress History - Add new diagnostic test result
-  app.post("/api/stress", (req, res) => {
+  // API 10: Stress History - Add new result
+  app.post("/api/stress", async (req, res) => {
     try {
+      const uid = getUid(req);
       const { score, level, description, advice } = req.body;
-      if (score === undefined || !level || !description || !advice) {
-        return res.status(400).json({ error: "score, level, description, and advice are required" });
-      }
-
-      const newHistoryItem = {
-        id: Math.random().toString(36).substring(2, 9),
+      
+      const newResult = {
+        userId: uid,
         date: new Date().toLocaleDateString("ko-KR", {
           year: "numeric",
           month: "long",
@@ -235,24 +250,25 @@ async function startServer() {
         level,
         description,
         advice,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
       };
 
-      const db = loadDB();
-      db.stressHistory.unshift(newHistoryItem);
-      saveDB(db);
-
-      res.status(201).json(newHistoryItem);
+      const docRef = await fdb.collection("users").doc(uid).collection("stress_history").add(newResult);
+      res.status(201).json({ id: docRef.id, ...newResult });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
   // API 11: Stress History - Clear history
-  app.delete("/api/stress", (req, res) => {
+  app.delete("/api/stress", async (req, res) => {
     try {
-      const db = loadDB();
-      db.stressHistory = [];
-      saveDB(db);
+      const uid = getUid(req);
+      const collectionRef = fdb.collection("users").doc(uid).collection("stress_history");
+      const snapshot = await collectionRef.get();
+      const batch = fdb.batch();
+      snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+      await batch.commit();
       res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ error: error.message });

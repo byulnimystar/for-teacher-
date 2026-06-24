@@ -7,6 +7,7 @@ import React, { useState, useEffect } from "react";
 import { BookOpen, Smile, Send, Trash2, MailOpen, Calendar, Compass, RefreshCw } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { DiaryEntry } from "../types";
+import { useAuth } from "../lib/firebase";
 
 const EMOTION_MAP = {
   peace: { icon: "🌱", label: "평온함", desc: "오늘은 평온 무탈한 교직 일상이었어요.", color: "bg-emerald-50 text-emerald-800 border-emerald-200" },
@@ -17,6 +18,7 @@ const EMOTION_MAP = {
 };
 
 export default function ThankYouDiary() {
+  const { user } = useAuth();
   const [diaryList, setDiaryList] = useState<DiaryEntry[]>(() => {
     const saved = localStorage.getItem("classtodac_diaries");
     if (saved) {
@@ -38,7 +40,10 @@ export default function ThankYouDiary() {
   useEffect(() => {
     const fetchDiariesFromBackend = async () => {
       try {
-        const res = await fetch("/api/diaries");
+        const headers: Record<string, string> = {};
+        if (user) headers["x-user-uid"] = user.uid;
+
+        const res = await fetch("/api/diaries", { headers });
         if (res.ok) {
           const data = await res.json();
           if (data && Array.isArray(data)) {
@@ -50,7 +55,7 @@ export default function ThankYouDiary() {
       }
     };
     fetchDiariesFromBackend();
-  }, []);
+  }, [user]);
 
   // Sync to localStorage
   useEffect(() => {
@@ -64,10 +69,13 @@ export default function ThankYouDiary() {
     setIsLoading(true);
 
     try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (user) headers["x-user-uid"] = user.uid;
+
       // Call server side diary creation (creates, replies, saves to database)
       const res = await fetch("/api/diaries", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ content: text, emotion }),
       });
 
@@ -90,7 +98,9 @@ export default function ThankYouDiary() {
   const handleDelete = async (id: string) => {
     if (window.confirm("정말 이 소중한 교무 수첩에서 일기를 지울까요?")) {
       try {
-        await fetch(`/api/diaries/${id}`, { method: "DELETE" });
+        const headers: Record<string, string> = {};
+        if (user) headers["x-user-uid"] = user.uid;
+        await fetch(`/api/diaries/${id}`, { method: "DELETE", headers });
       } catch (e) {
         console.error("Failed to delete diary from backend:", e);
       }

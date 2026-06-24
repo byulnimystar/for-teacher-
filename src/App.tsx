@@ -9,17 +9,19 @@
  */
 
 import { useState } from "react";
-import { Heart, Sparkles, Wind, BookOpen, ClipboardCheck, Coffee } from "lucide-react";
+import { Heart, Sparkles, Wind, BookOpen, ClipboardCheck, Coffee, LogIn, LogOut, User as UserIcon } from "lucide-react";
 import AICounselor from "./components/AICounselor";
 import BreathingGuide from "./components/BreathingGuide";
 import StressCheck from "./components/StressCheck";
 import ThankYouDiary from "./components/ThankYouDiary";
 import ComfortCards from "./components/ComfortCards";
+import { useAuth } from "./lib/firebase";
 
 type ActiveTab = "counsel" | "breath" | "diary" | "cards" | "stress";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("counsel");
+  const { user, login, logout, loading } = useAuth();
 
   const tabMeta = {
     counsel: {
@@ -64,13 +66,47 @@ export default function App() {
 
       <main className="max-w-4xl w-full mx-auto px-4 py-8 flex-1 flex flex-col justify-center">
         {/* Main Branding Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900 flex items-center justify-center gap-2">
-            🌱 토닥토닥 교실
-          </h1>
-          <p className="text-xs text-stone-500 font-medium mt-1">
-            출근길 긴 한숨을 따뜻한 위안으로 채워줄 지친 교사용 고민 상담 및 마음챙김 안전처
-          </p>
+        <div className="flex flex-col items-center mb-8">
+          <div className="w-full flex justify-end mb-4">
+            {loading ? (
+              <div className="h-8 w-24 bg-stone-200 animate-pulse rounded-full" />
+            ) : user ? (
+              <div className="flex items-center gap-3 bg-white border border-stone-200 pl-2 pr-1 py-1 rounded-full shadow-2xs">
+                <div className="flex items-center gap-2 pr-1">
+                  {user.photoURL ? (
+                    <img src={user.photoURL} alt="profile" className="w-6 h-6 rounded-full border border-stone-100" referrerPolicy="no-referrer" />
+                  ) : (
+                    <UserIcon className="w-5 h-5 text-stone-400" />
+                  )}
+                  <span className="text-[11px] font-bold text-stone-700 max-w-[100px] truncate">{user.displayName || "선생님"}</span>
+                </div>
+                <button 
+                  onClick={logout}
+                  className="bg-stone-50 hover:bg-stone-100 text-stone-400 hover:text-stone-600 p-1.5 rounded-full transition-colors cursor-pointer"
+                  title="로그아웃"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <button 
+                onClick={login}
+                className="flex items-center gap-2 bg-amber-800 hover:bg-amber-900 text-white px-4 py-1.5 rounded-full text-[12px] font-bold shadow-xs hover:shadow-sm transition-all cursor-pointer"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                선생님 로그인
+              </button>
+            )}
+          </div>
+
+          <div className="text-center">
+            <h1 className="text-2xl font-bold tracking-tight text-gray-900 flex items-center justify-center gap-2">
+              🌱 토닥토닥 교실
+            </h1>
+            <p className="text-xs text-stone-500 font-medium mt-1">
+              출근길 긴 한숨을 따뜻한 위안으로 채워줄 지친 교사용 고민 상담 및 마음챙김 안전처
+            </p>
+          </div>
         </div>
 
         {/* Dynamic single view framework selectors */}

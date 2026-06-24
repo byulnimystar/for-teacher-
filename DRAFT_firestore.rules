@@ -1,0 +1,80 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default Deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // --- Entity Validations ---
+
+    function isValidChat(data) {
+      return data.keys().hasAll(['userId', 'messages', 'updatedAt'])
+        && data.keys().size() == 3
+        && data.userId == request.auth.uid
+        && data.messages is list
+        && data.messages.size() <= 500
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidDiary(data) {
+      return data.keys().hasAll(['userId', 'date', 'content', 'emotion', 'reply', 'createdAt'])
+        && data.keys().size() == 6
+        && data.userId == request.auth.uid
+        && data.date is string && data.date.size() <= 100
+        && data.content is string && data.content.size() <= 5000
+        && data.emotion is string && data.emotion.size() <= 50
+        && data.reply is string && data.reply.size() <= 5000
+        && data.createdAt is timestamp;
+    }
+
+    function isValidStressHistory(data) {
+      return data.keys().hasAll(['userId', 'date', 'score', 'level', 'description', 'advice', 'createdAt'])
+        && data.keys().size() == 7
+        && data.userId == request.auth.uid
+        && data.date is string && data.date.size() <= 100
+        && data.score is number
+        && data.level is string && data.level.size() <= 100
+        && data.description is string && data.description.size() <= 5000
+        && data.advice is string && data.advice.size() <= 5000
+        && data.createdAt is timestamp;
+    }
+
+    // --- Match Rules ---
+
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+
+      // Chat history
+      match /chats/{chatId} {
+        allow read, write: if isOwner(userId) && isValidId(chatId);
+        allow create, update: if isValidChat(request.resource.data);
+      }
+
+      // Diaries
+      match /diaries/{diaryId} {
+        allow read, write: if isOwner(userId) && isValidId(diaryId);
+        allow create, update: if isValidDiary(request.resource.data);
+      }
+
+      // Stress History
+      match /stress_history/{historyId} {
+        allow read, write: if isOwner(userId) && isValidId(historyId);
+        allow create, update: if isValidStressHistory(request.resource.data);
+      }
+    }
+  }
+}

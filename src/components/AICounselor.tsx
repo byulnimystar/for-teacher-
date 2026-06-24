@@ -7,6 +7,7 @@ import { useState, useRef, useEffect } from "react";
 import { Send, Sparkles, User, RefreshCw, AlertCircle, Heart, BarChart3, ChevronDown, ChevronUp } from "lucide-react";
 import { motion } from "motion/react";
 import { CounselMessage } from "../types";
+import { useAuth } from "../lib/firebase";
 
 const INITIAL_SUGGESTIONS = [
   {
@@ -28,6 +29,7 @@ const INITIAL_SUGGESTIONS = [
 ];
 
 export default function AICounselor() {
+  const { user } = useAuth();
   const [messages, setMessages] = useState<CounselMessage[]>(() => {
     const saved = localStorage.getItem("classtodac_chats");
     if (saved) {
@@ -129,7 +131,10 @@ export default function AICounselor() {
   useEffect(() => {
     const loadChatsFromBackend = async () => {
       try {
-        const res = await fetch("/api/chats");
+        const headers: Record<string, string> = {};
+        if (user) headers["x-user-uid"] = user.uid;
+
+        const res = await fetch("/api/chats", { headers });
         if (res.ok) {
           const data = await res.json();
           if (data && Array.isArray(data) && data.length > 0) {
@@ -141,7 +146,7 @@ export default function AICounselor() {
       }
     };
     loadChatsFromBackend();
-  }, []);
+  }, [user]);
 
   // Sync chats to localStorage and server backend database on messages change
   useEffect(() => {
@@ -149,9 +154,12 @@ export default function AICounselor() {
     
     const syncWithBackend = async () => {
       try {
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (user) headers["x-user-uid"] = user.uid;
+
         await fetch("/api/chats", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify({ messages }),
         });
       } catch (e) {
@@ -161,7 +169,7 @@ export default function AICounselor() {
     if (messages.length > 0) {
       syncWithBackend();
     }
-  }, [messages]);
+  }, [messages, user]);
 
   // Scroll to bottom
   useEffect(() => {
@@ -191,11 +199,12 @@ export default function AICounselor() {
         content: msg.content,
       }));
 
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (user) headers["x-user-uid"] = user.uid;
+
       const res = await fetch("/api/counsel", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify({ messages: payloadMessages }),
       });
 
@@ -234,7 +243,9 @@ export default function AICounselor() {
       setError(null);
 
       try {
-        await fetch("/api/chats", { method: "DELETE" });
+        const headers: Record<string, string> = {};
+        if (user) headers["x-user-uid"] = user.uid;
+        await fetch("/api/chats", { method: "DELETE", headers });
       } catch (e) {
         console.error("Failed to delete chat logs on server:", e);
       }

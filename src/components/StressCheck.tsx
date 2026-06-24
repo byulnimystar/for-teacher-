@@ -7,6 +7,7 @@ import { useState, useEffect } from "react";
 import { AlertTriangle, ClipboardCheck, Award, Heart, RefreshCw } from "lucide-react";
 import { motion } from "motion/react";
 import { TestResult } from "../types";
+import { useAuth } from "../lib/firebase";
 
 const STRESS_QUESTIONS = [
   { id: 1, text: "아침에 학교로 출근할 생각을 하면 가슴이 저릿하거나 한숨이 크게 나온다." },
@@ -20,6 +21,7 @@ const STRESS_QUESTIONS = [
 ];
 
 export default function StressCheck() {
+  const { user } = useAuth();
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [submitted, setSubmitted] = useState(false);
   const [result, setResult] = useState<TestResult | null>(null);
@@ -29,7 +31,10 @@ export default function StressCheck() {
   useEffect(() => {
     const fetchHistoryFromBackend = async () => {
       try {
-        const res = await fetch("/api/stress");
+        const headers: Record<string, string> = {};
+        if (user) headers["x-user-uid"] = user.uid;
+
+        const res = await fetch("/api/stress", { headers });
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data)) {
@@ -41,7 +46,7 @@ export default function StressCheck() {
       }
     };
     fetchHistoryFromBackend();
-  }, [submitted]);
+  }, [submitted, user]);
 
   const handleSelect = (qId: number, score: number) => {
     setAnswers((prev) => ({
@@ -99,9 +104,12 @@ export default function StressCheck() {
     setSubmitted(true);
 
     // Save final diagnostic result to backend stress history database
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (user) headers["x-user-uid"] = user.uid;
+
     fetch("/api/stress", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify(finalResult),
     }).catch((err) => console.error("Failed to sync diagnosis to backend server:", err));
   };
@@ -113,9 +121,11 @@ export default function StressCheck() {
   };
 
   const clearHistory = async () => {
-    if (window.confirm("그간의 모든 자가진단 기록(서버 데이터)을 깨끗이 지우시겠습니까?")) {
+    if (window.confirm("그간의 모든 자가진단 기록(서버 데이터)을 깨닥 지우시겠습니까?")) {
       try {
-        await fetch("/api/stress", { method: "DELETE" });
+        const headers: Record<string, string> = {};
+        if (user) headers["x-user-uid"] = user.uid;
+        await fetch("/api/stress", { method: "DELETE", headers });
         setHistory([]);
       } catch (e) {
         console.error("Failed to erase stress records on server:", e);
