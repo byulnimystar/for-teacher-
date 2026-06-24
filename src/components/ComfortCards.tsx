@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Coffee, Heart, Sparkles, Navigation, Layers } from "lucide-react";
 import { motion } from "motion/react";
 import { ComfortCard } from "../types";
@@ -63,9 +63,32 @@ export default function ComfortCards() {
   const [selectedCard, setSelectedCard] = useState<ComfortCard | null>(null);
   const [isFlipped, setIsFlipped] = useState(false);
   const [cardHistory, setCardHistory] = useState<ComfortCard[]>([]);
+  
+  // Use a ref to keep a persistent audio object
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    // Preload the sound (Clean, clear chime)
+    audioRef.current = new Audio("https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3");
+    audioRef.current.load();
+    audioRef.current.volume = 0.25;
+  }, []);
+
+  // Sound effect helper
+  const playSparkleSound = () => {
+    if (audioRef.current) {
+      // Reset sound to start if it's already playing
+      audioRef.current.currentTime = 0;
+      audioRef.current.play().catch(e => {
+        console.warn("Audio play blocked or failed:", e);
+      });
+    }
+  };
 
   const drawCard = () => {
     setIsFlipped(false);
+    playSparkleSound();
+    
     // Timeout to make sure flip is reset before showing the next card
     setTimeout(() => {
       const remainingCards = CARDS_POOL.filter(c => selectedCard ? c.id !== selectedCard.id : true);
@@ -75,6 +98,13 @@ export default function ComfortCards() {
       setIsFlipped(true);
       setCardHistory(prev => [chosen, ...prev.slice(0, 4)]);
     }, 150);
+  };
+
+  const toggleFlip = () => {
+    setIsFlipped(!isFlipped);
+    if (!isFlipped) {
+      playSparkleSound();
+    }
   };
 
   return (
@@ -97,7 +127,7 @@ export default function ComfortCards() {
                 transition={{ duration: 0.6, ease: "easeOut" }}
                 style={{ transformStyle: "preserve-3d" }}
                 className="w-full h-full cursor-pointer relative"
-                onClick={() => setIsFlipped(!isFlipped)}
+                onClick={toggleFlip}
               >
                 {/* Front Side: Card Back aesthetic */}
                 <div
@@ -187,6 +217,7 @@ export default function ComfortCards() {
                   onClick={() => {
                     setSelectedCard(historyItem);
                     setIsFlipped(true);
+                    playSparkleSound();
                   }}
                   className="text-left p-3 bg-stone-50 hover:bg-amber-100/20 border border-stone-150 rounded-lg cursor-pointer transition-all flex justify-between items-center"
                 >
