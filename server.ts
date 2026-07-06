@@ -135,6 +135,35 @@ async function startServer() {
     }
   });
 
+  // API 5-2: Class Counsel AI Reply Recommendation
+  app.post("/api/class-counsel/reply-ai", async (req, res) => {
+    try {
+      const { content, studentName } = req.body;
+      if (!content || typeof content !== "string") {
+        return res.status(400).json({ error: "content text is required" });
+      }
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: `우리 반 학생(${studentName || '익명'})이 올린 고민 내용:
+"${content}"`,
+        config: {
+          systemInstruction: `당신은 초등/중고등학교 학급의 지혜롭고 사랑이 가득한 다정한 담임 선생님입니다.
+익명으로 고민을 남긴 사랑하는 반 학생을 위해 마음을 어루만져 주는 따뜻하고 다정한 위로의 답장을 작성해 주세요.
+- 학생의 눈높이에 맞춰 친절하고 공감 가득한 문장으로 이야기하듯 다독여 주세요. 반말보다는 존댓말이나 친근한 어조를 섞어 사용하세요 (예: "~했구나. 속상했겠네. 선생님이 항상 응원하고 있으니 언제든 편하게 와서 이야기해도 좋아.")
+- 너무 딱딱한 조언보다는 마음을 먼저 위로해 주며, 학급에서 해결할 수 있는 따뜻한 팁을 1~2개 제시해 주세요.
+- 마지막에는 "언제든 교무실로 차 한 잔 마시러 오렴. 선생님이 언제나 네 편이야." 처럼 담임 교사로서 든든한 버팀목이 되어주는 말을 남겨 주세요.`,
+          temperature: 0.8,
+        },
+      });
+
+      res.json({ text: response.text || "얘야, 마음이 참 무거웠겠구나. 선생님이 언제나 든든히 네 뒤에서 지켜주고 있으니 너무 걱정하지 마렴." });
+    } catch (error: any) {
+      console.error("Error in /api/class-counsel/reply-ai:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // API 6: Diaries - Get emotion diaries
   app.get("/api/diaries", async (req, res) => {
     try {

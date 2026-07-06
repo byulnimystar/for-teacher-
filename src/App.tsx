@@ -9,15 +9,17 @@
  */
 
 import { useState } from "react";
-import { Heart, Sparkles, Wind, BookOpen, ClipboardCheck, Coffee, LogIn, LogOut, User as UserIcon } from "lucide-react";
+import { Heart, Sparkles, Wind, BookOpen, ClipboardCheck, Coffee, LogIn, LogOut, User as UserIcon, Database, MessageSquare } from "lucide-react";
 import AICounselor from "./components/AICounselor";
 import BreathingGuide from "./components/BreathingGuide";
 import StressCheck from "./components/StressCheck";
 import ThankYouDiary from "./components/ThankYouDiary";
 import ComfortCards from "./components/ComfortCards";
+import ClassCounselBoard from "./components/ClassCounselBoard";
+import ClassCheerBoard from "./components/ClassCheerBoard";
 import { useAuth } from "./lib/firebase";
 
-type ActiveTab = "counsel" | "breath" | "diary" | "cards" | "stress";
+type ActiveTab = "counsel" | "breath" | "diary" | "cards" | "stress" | "classCounsel" | "classCheer";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("counsel");
@@ -53,6 +55,18 @@ export default function App() {
       icon: <ClipboardCheck className="w-4 h-4 text-amber-900" />,
       desc: "지친 교직 생활에 녹아 버린 피로가 없는지 솔직하게 내면 검진",
       bgClass: "from-stone-100 to-amber-50/30",
+    },
+    classCounsel: {
+      label: "학급 고민게시판",
+      icon: <Database className="w-4 h-4 text-amber-800" />,
+      desc: "Supabase 연동 완료! 우리 반 아이들의 고민을 듣고 따스하게 위로해주는 학급 고민 창구",
+      bgClass: "from-orange-50 to-amber-100/40",
+    },
+    classCheer: {
+      label: "따뜻한 응원보드",
+      icon: <MessageSquare className="w-4 h-4 text-rose-700 animate-pulse" />,
+      desc: "Supabase 실시간 응원 보드! 서로에게 건네는 따뜻한 한 줄 칭찬과 치유의 카드",
+      bgClass: "from-rose-50 to-amber-100/30",
     },
   };
 
@@ -110,7 +124,7 @@ export default function App() {
         </div>
 
         {/* Dynamic single view framework selectors */}
-        <div className="bg-white rounded-2xl border border-stone-200 p-2.5 shadow-2xs mb-6 grid grid-cols-2 sm:grid-cols-5 gap-1.5 max-w-3xl mx-auto w-full transition-all">
+        <div className="bg-white rounded-2xl border border-stone-200 p-2.5 shadow-2xs mb-6 grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-1.5 max-w-4xl mx-auto w-full transition-all">
           {(Object.keys(tabMeta) as ActiveTab[]).map((tab) => {
             const isSelected = activeTab === tab;
             return (
@@ -118,7 +132,7 @@ export default function App() {
                 key={tab}
                 id={`tab-btn-${tab}`}
                 onClick={() => setActiveTab(tab)}
-                className={`py-3.5 px-3 rounded-xl text-center border transition-all flex flex-col items-center justify-center cursor-pointer ${
+                className={`py-3 px-1 rounded-xl text-center border transition-all flex flex-col items-center justify-center cursor-pointer ${
                   isSelected
                     ? "bg-amber-800 border-amber-800 text-white shadow-xs"
                     : "bg-stone-50 hover:bg-stone-100 border-stone-150 text-gray-700"
@@ -127,14 +141,14 @@ export default function App() {
                 <div className={`p-1.5 rounded-lg mb-1 leading-none ${isSelected ? "bg-white" : "bg-stone-200/50"}`}>
                   {tabMeta[tab].icon}
                 </div>
-                <span className="text-[12px] font-bold tracking-tight">{tabMeta[tab].label}</span>
+                <span className="text-[11px] font-bold tracking-tight">{tabMeta[tab].label}</span>
               </button>
             );
           })}
         </div>
 
         {/* Tab Descriptor sub-bar */}
-        <div className={`max-w-3xl mx-auto w-full mb-6 p-4 rounded-xl border border-amber-100/40 bg-gradient-to-r ${tabMeta[activeTab].bgClass} text-center shadow-3xs transition-all duration-300`}>
+        <div className={`max-w-4xl mx-auto w-full mb-6 p-4 rounded-xl border border-amber-100/40 bg-gradient-to-r ${tabMeta[activeTab].bgClass} text-center shadow-3xs transition-all duration-300`}>
           <span className="text-xs font-semibold text-amber-900 tracking-tight block">
             🌌 [ {tabMeta[activeTab].label} ] : {tabMeta[activeTab].desc}
           </span>
@@ -147,6 +161,8 @@ export default function App() {
           {activeTab === "diary" && <ThankYouDiary />}
           {activeTab === "cards" && <ComfortCards />}
           {activeTab === "stress" && <StressCheck />}
+          {activeTab === "classCounsel" && <ClassCounselBoard />}
+          {activeTab === "classCheer" && <ClassCheerBoard />}
         </div>
       </main>
 
